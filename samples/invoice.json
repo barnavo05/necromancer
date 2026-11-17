@@ -1,0 +1,14 @@
+{
+  "name": "Invoice with tax",
+  "program": "INVOICE",
+  "summary": "Prices an order from quantity and unit price, applies a quantity discount tier (5, 10 or 15 percent), then adds 8.25 percent sales tax. The discount is cut off at cents, but the tax is rounded to the nearest cent.",
+  "inputs": [
+    {"name": "quantity", "digits": 3, "scale": 0, "min": "0", "max": "500"},
+    {"name": "price", "digits": 4, "scale": 2, "min": "0", "max": "2000"}
+  ],
+  "paragraphs": [
+    {"name": "MAIN-PARA", "explanation": "Reads quantity and unit price, works out the subtotal, picks a discount tier, takes the discount off, adds tax, and prints subtotal, discount, tax and total."},
+    {"name": "TIER-PARA", "explanation": "Chooses the discount rate from the quantity: 15 percent for 100 or more, 10 percent for 50 or more, 5 percent for 10 or more, otherwise none. The first matching rule wins."},
+    {"name": "TAX-PARA", "explanation": "Charges 8.25 percent tax on the discounted amount. Unlike every other step, this one is rounded to the nearest cent instead of cut off, because of the ROUNDED keyword."}
+  ]
+}

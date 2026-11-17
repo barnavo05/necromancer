@@ -104,8 +104,8 @@ def test_every_sample_is_verified(sample_id):
     assert res.json()["verified"] is True, res.json()["restless_spirits"][:1]
 
 
-def test_three_samples_exist():
-    assert SAMPLE_IDS == ["interest", "loan", "payroll"]
+def test_four_samples_exist():
+    assert SAMPLE_IDS == ["interest", "invoice", "loan", "payroll"]
 
 
 @pytest.mark.parametrize("sample_id", SAMPLE_IDS)
@@ -205,3 +205,14 @@ def test_cobol_hang_is_reported_as_a_restless_spirit():
     assert result["verified"] is False
     spirit = result["restless_spirits"][0]
     assert spirit["cobol"] is None and "timed out" in spirit["error"]
+
+
+def test_invoice_truncating_the_rounded_tax_is_caught():
+    meta = json.loads((SAMPLES / "invoice.json").read_text())
+    cobol = (SAMPLES / "invoice.cbl").read_text()
+    py = (SAMPLES / "invoice.py").read_text()
+    assert run_seance(cobol, py, meta["inputs"], 150)["verified"] is True
+    wrong = py.replace("ROUND_HALF_UP)", "ROUND_DOWN)")
+    result = run_seance(cobol, wrong, meta["inputs"], 150)
+    assert result["verified"] is False
+    assert any(s["cobol"][2] != s["python"][2] for s in result["restless_spirits"])

@@ -58,14 +58,15 @@ docker run -p 8000:8000 necromancer-api
 | `interest` | Compound interest, cents cut off every year |
 | `payroll` | Overtime at 1.5x, tax on the part above 500.00 |
 | `loan` | Month by month repayment loop with a 360 month cap |
+| `invoice` | Discount tiers with EVALUATE, and tax with ROUNDED (rounds, where everything else truncates) |
 
-Each sample has a `.cbl` program, a `.json` file (summary, paragraph explanations, input ranges) and a `.py` translation. All three are verified by the seance in the test suite.
+Each sample has a `.cbl` program, a `.json` file (summary, paragraph explanations, input ranges) and a `.py` translation. All four are verified by the seance in the test suite.
 
 ## What the seance caught
 
 Three real COBOL traps showed up while building this, and the seance is what exposed them.
 
-1. **COBOL truncates, Python rounds.** `COMPUTE` without `ROUNDED` cuts extra decimals off when it stores a result. A natural Python translation rounds instead, and the totals drift by cents. Translations must quantize with `ROUND_DOWN`.
+1. **COBOL truncates, Python rounds.** `COMPUTE` without `ROUNDED` cuts extra decimals off when it stores a result. A natural Python translation rounds instead, and the totals drift by cents. Translations must quantize with `ROUND_DOWN`. The reverse also holds: `COMPUTE ... ROUNDED` rounds half up, so the `invoice` sample needs `ROUND_HALF_UP` for its tax.
 2. **`ACCEPT` into a numeric field copies characters.** `19.99` read into `PIC 9(2)V99` silently becomes `19.90`. Programs here read each line as text and convert it with `FUNCTION NUMVAL`.
 
 3. **Loop counters wrap.** A `PIC 9(2)` counter that must reach 99 wraps to 00, so the loop never ends. The seance reports a hang or crash in the old program as a restless spirit instead of stopping, and input ranges leave one digit of headroom.
