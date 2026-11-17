@@ -1,0 +1,10 @@
+{
+  "name": "Compound interest",
+  "program": "INTEREST",
+  "summary": "Takes a deposit, an annual rate and a number of years, compounds the balance once a year (truncating to cents each year, as the COBOL does), and reports the final balance and the interest earned.",
+  "inputs": [
+    {"name": "principal", "digits": 7, "scale": 2, "min": "0", "max": "100000"},
+    {"name": "rate", "digits": 2, "scale": 2, "min": "0", "max": "20"},
+    {"name": "years", "digits": 2, "scale": 0, "min": "0", "max": "30"}
+  ]
+}
