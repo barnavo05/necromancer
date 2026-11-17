@@ -152,3 +152,56 @@ def test_custom_seance_with_own_spec():
     body = {"cobol": COBOL, "python": PYTHON, "inputs": META["inputs"], "cases": 30}
     res = client.post("/api/seance", json=body)
     assert res.status_code == 200 and res.json()["verified"] is True
+
+
+# Input inference for custom COBOL
+
+@pytest.mark.parametrize("sample_id", SAMPLE_IDS)
+def test_infer_inputs_matches_each_sample_shape(sample_id):
+    from app.infer import infer_inputs
+
+    sample = json.loads((SAMPLES / f"{sample_id}.json").read_text())
+    cobol = (SAMPLES / f"{sample_id}.cbl").read_text()
+    guessed = infer_inputs(cobol)
+    assert [(g["digits"], g["scale"]) for g in guessed] == [(f["digits"], f["scale"]) for f in sample["inputs"]]
+
+
+def test_inferred_inputs_run_a_clean_seance():
+    from app.infer import infer_inputs
+
+    spec = infer_inputs(COBOL)
+    result = run_seance(COBOL, PYTHON, spec, 60)
+    assert result["verified"] is True
+
+
+def test_infer_endpoint_for_custom_cobol_and_failure():
+    ok = client.post("/api/infer-inputs", json={"cobol": COBOL})
+    assert ok.status_code == 200 and len(ok.json()["inputs"]) == 3
+    bad = client.post("/api/infer-inputs", json={"cobol": "       IDENTIFICATION DIVISION."})
+    assert bad.status_code == 422
+
+
+def test_cobol_hang_is_reported_as_a_restless_spirit():
+    hang = """       IDENTIFICATION DIVISION.
+       PROGRAM-ID. HANG.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-LINE PIC X(20).
+       01 WS-N PIC 9(2).
+       01 WS-I PIC 9(2).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           ACCEPT WS-LINE
+           COMPUTE WS-N = FUNCTION NUMVAL(WS-LINE)
+           PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > WS-N
+               CONTINUE
+           END-PERFORM
+           DISPLAY "DONE"
+           STOP RUN.
+"""
+    py = "def main(lines):\n    return ['DONE']\n"
+    spec = [{"name": "n", "digits": 2, "scale": 0, "min": "98", "max": "99"}]
+    result = run_seance(hang, py, spec, 6)
+    assert result["verified"] is False
+    spirit = result["restless_spirits"][0]
+    assert spirit["cobol"] is None and "timed out" in spirit["error"]

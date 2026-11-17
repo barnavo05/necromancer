@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from . import llm
 from .cobol_runner import CobolError
+from .infer import infer_inputs
 from .python_runner import PythonError
 from .seance import run_seance
 
@@ -76,6 +77,19 @@ def _resolve_cobol(req: CodeRequest) -> tuple[str, dict | None]:
     if req.cobol:
         return req.cobol, None
     raise HTTPException(422, "Provide sample_id or cobol")
+
+
+@app.post("/api/infer-inputs")
+def infer(req: CodeRequest) -> dict:
+    cobol, sample = _resolve_cobol(req)
+    spec = sample["inputs"] if sample else infer_inputs(cobol)
+    if not spec:
+        raise HTTPException(
+            422,
+            "Could not find any inputs. Read each value with ACCEPT into a text field, "
+            "then COMPUTE the number with FUNCTION NUMVAL on the next line.",
+        )
+    return {"inputs": spec}
 
 
 @app.post("/api/exhume")

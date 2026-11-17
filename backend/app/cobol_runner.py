@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 COMPILE_TIMEOUT = 30
-RUN_TIMEOUT = 5
+RUN_TIMEOUT = 2
 MAX_OUTPUT_BYTES = 64_000
 MAX_SOURCE_BYTES = 100_000
 

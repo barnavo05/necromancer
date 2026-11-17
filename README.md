@@ -33,7 +33,7 @@ npm run dev
 
 Open http://localhost:3000. The three bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
 
-To exhume and resurrect your own COBOL, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
+To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
 
 Docker, from the repo root:
 
@@ -54,10 +54,12 @@ Each sample has a `.cbl` program, a `.json` file (summary, paragraph explanation
 
 ## What the seance caught
 
-Two real COBOL traps showed up while building this, and the seance is what exposed them.
+Three real COBOL traps showed up while building this, and the seance is what exposed them.
 
 1. **COBOL truncates, Python rounds.** `COMPUTE` without `ROUNDED` cuts extra decimals off when it stores a result. A natural Python translation rounds instead, and the totals drift by cents. Translations must quantize with `ROUND_DOWN`.
 2. **`ACCEPT` into a numeric field copies characters.** `19.99` read into `PIC 9(2)V99` silently becomes `19.90`. Programs here read each line as text and convert it with `FUNCTION NUMVAL`.
+
+3. **Loop counters wrap.** A `PIC 9(2)` counter that must reach 99 wraps to 00, so the loop never ends. The seance reports a hang or crash in the old program as a restless spirit instead of stopping, and input ranges leave one digit of headroom.
 
 ## The I/O contract
 
@@ -72,6 +74,7 @@ Two real COBOL traps showed up while building this, and the seance is what expos
 |---|---|
 | `GET /api/health` | Liveness |
 | `GET /api/samples`, `GET /api/samples/{id}` | Bundled programs |
+| `POST /api/infer-inputs` | Detect a program's inputs (ACCEPT plus NUMVAL) and safe default ranges |
 | `POST /api/exhume` | Plain English explanation (bundled sample or custom COBOL via the model) |
 | `POST /api/resurrect` | Python translation (bundled sample or custom COBOL via the model) |
 | `POST /api/seance` | Run COBOL and Python on generated inputs, return matches and restless spirits |

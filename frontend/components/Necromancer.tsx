@@ -2,9 +2,31 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  exhume, getSample, listSamples, resurrect, seance,
-  type Exhumed, type Sample, type SampleSummary, type SeanceResult, type Spirit,
+  exhume, getSample, inferInputs, listSamples, resurrect, seance,
+  type Exhumed, type InputSpec, type Sample, type SampleSummary, type SeanceResult, type Source, type Spirit,
 } from "@/lib/api";
+
+const CUSTOM = "__custom__";
+const CUSTOM_HINT = `       IDENTIFICATION DIVISION.
+       PROGRAM-ID. MYPROG.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-LINE   PIC X(20).
+       01 WS-AMOUNT PIC 9(5)V99.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           ACCEPT WS-LINE
+           COMPUTE WS-AMOUNT = FUNCTION NUMVAL(WS-LINE)
+           DISPLAY "AMOUNT=" WS-AMOUNT
+           STOP RUN.
+`;
+const PYTHON_STUB = `from decimal import Decimal
+
+
+def main(lines):
+    # lines are the stdin lines. Return the stdout lines.
+    return []
+`;
 
 type ParagraphRange = { name: string; start: number; end: number };
 
@@ -89,7 +111,7 @@ function GreenScreen({ cobol, active }: { cobol: string; active: ParagraphRange 
 }
 
 function OutputLines({ lines, other }: { lines: string[] | null; other: string[] | null }) {
-  if (!lines) return <p className="font-mono text-sm text-muted">no output</p>;
+  if (!lines) return <p className="px-1 font-mono text-sm font-bold underline decoration-2 underline-offset-4">no output</p>;
   return (
     <div className="font-mono text-sm">
       {lines.map((l, i) => (
@@ -132,6 +154,12 @@ export default function Necromancer() {
   const [busy, setBusy] = useState<"" | "exhume" | "resurrect" | "seance">("");
   const [error, setError] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [customCobol, setCustomCobol] = useState("");
+  const [customInputs, setCustomInputs] = useState<InputSpec[] | null>(null);
+
+  const isCustom = sampleId === CUSTOM;
+  const cobolText = isCustom ? customCobol : sample?.cobol ?? "";
+  const source: Source | null = isCustom ? (customCobol.trim() ? { cobol: customCobol } : null) : sampleId ? { sample_id: sampleId } : null;
 
   useEffect(() => {
     listSamples()
@@ -142,10 +170,11 @@ export default function Necromancer() {
   useEffect(() => {
     if (!sampleId) return;
     setSample(null); setExhumed(null); setPython(null); setResult(null); setError(null);
+    if (sampleId === CUSTOM) return;
     getSample(sampleId).then(setSample).catch((e) => setError(e.message));
   }, [sampleId]);
 
-  const ranges = useMemo(() => (sample ? paragraphRanges(sample.cobol) : []), [sample]);
+  const ranges = useMemo(() => paragraphRanges(cobolText), [cobolText]);
   const activeRange = ranges.find((r) => r.name === hovered) ?? null;
 
   async function run<T>(kind: "exhume" | "resurrect" | "seance", fn: () => Promise<T>, done: (v: T) => void) {
@@ -153,7 +182,8 @@ export default function Necromancer() {
     try { done(await fn()); } catch (e) { setError((e as Error).message); } finally { setBusy(""); }
   }
 
-  const inputNames: string[] = useMemo(() => sample?.inputs.map((f) => f.name) ?? [], [sample]);
+  const specInputs = isCustom ? customInputs : sample?.inputs ?? null;
+  const inputNames: string[] = useMemo(() => specInputs?.map((f) => f.name) ?? [], [specInputs]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 pb-40 sm:px-10">
@@ -181,6 +211,18 @@ export default function Necromancer() {
               {s.name}
             </button>
           ))}
+          {samples.length > 0 && (
+            <button
+              role="tab"
+              aria-selected={isCustom}
+              onClick={() => setSampleId(CUSTOM)}
+              className={`rounded-full border px-5 py-2.5 text-sm font-medium transition-colors duration-500 ${
+                isCustom ? "border-ink bg-ink text-paper" : "border-dashed border-ink/40 hover:border-ink"
+              }`}
+            >
+              Your own program
+            </button>
+          )}
         </div>
         {error && <p role="alert" className="mt-6 text-sm text-ink underline">{error}</p>}
       </section>
@@ -189,15 +231,76 @@ export default function Necromancer() {
       <section className="border-t border-line py-28">
         <StepHeader n="01" title="Exhume" line="Read the old program the way it was written, then hear what it does in plain English." />
         <div className="grid gap-10 lg:grid-cols-2">
-          <div>{sample ? <GreenScreen cobol={sample.cobol} active={activeRange} /> : <p className="text-muted">Loading…</p>}</div>
+          <div>
+            {isCustom ? (
+              <div className="overflow-hidden rounded-lg bg-screen shadow-sm">
+                <div className="border-b border-white/10 px-4 py-2 font-mono text-xs text-phosphor/60">
+                  MAINFRAME TERMINAL (paste your COBOL)
+                </div>
+                <textarea
+                  value={customCobol}
+                  onChange={(e) => { setCustomCobol(e.target.value); setCustomInputs(null); setExhumed(null); setPython(null); setResult(null); }}
+                  placeholder={CUSTOM_HINT}
+                  spellCheck={false}
+                  aria-label="Your COBOL program"
+                  className="block h-[34rem] w-full resize-y bg-screen p-4 font-mono text-[13px] leading-6 text-phosphor/90 outline-none placeholder:text-phosphor/30"
+                />
+              </div>
+            ) : sample ? (
+              <GreenScreen cobol={sample.cobol} active={activeRange} />
+            ) : (
+              <p className="text-muted">Loading…</p>
+            )}
+          </div>
           <div>
             {!exhumed ? (
               <div>
                 <p className="max-w-md text-muted">
-                  {sample ? "Nothing is explained until you ask. The code on the left is the real file." : ""}
+                  {isCustom
+                    ? "Paste a COBOL program that reads each input with ACCEPT into a text field, then FUNCTION NUMVAL on the next line. Find its inputs first, so the seance knows what to feed it."
+                    : sample ? "Nothing is explained until you ask. The code on the left is the real file." : ""}
                 </p>
+                {isCustom && (
+                  <div className="mt-6">
+                    <ActionButton
+                      quiet
+                      disabled={!customCobol.trim() || busy !== ""}
+                      onClick={() => { setError(null); inferInputs(customCobol).then((r) => setCustomInputs(r.inputs)).catch((e) => setError(e.message)); }}
+                    >
+                      Find inputs
+                    </ActionButton>
+                  </div>
+                )}
+                {isCustom && customInputs && (
+                  <div className="mt-6 animate-rise">
+                    <p className="mb-3 text-sm text-muted">
+                      The seance will only generate inputs inside these ranges. COBOL silently overflows, so keep them safe.
+                    </p>
+                    <div className="divide-y divide-line border-y border-line">
+                      {customInputs.map((f, i) => (
+                        <div key={i} className="flex flex-wrap items-center gap-4 py-3 font-mono text-sm">
+                          <span className="w-32">{f.name}</span>
+                          {(["min", "max"] as const).map((k) => (
+                            <label key={k} className="flex items-center gap-2 text-muted">
+                              {k}
+                              <input
+                                value={f[k]}
+                                inputMode="decimal"
+                                aria-label={`${f.name} ${k}`}
+                                onChange={(e) =>
+                                  setCustomInputs(customInputs.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))
+                                }
+                                className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-6">
-                  <ActionButton disabled={!sampleId || busy !== ""} onClick={() => run("exhume", () => exhume(sampleId!), setExhumed)}>
+                  <ActionButton disabled={!source || busy !== ""} onClick={() => run("exhume", () => exhume(source!), setExhumed)}>
                     {busy === "exhume" ? "Exhuming" : "Exhume"}
                   </ActionButton>
                 </div>
@@ -229,13 +332,20 @@ export default function Necromancer() {
       </section>
 
       {/* 02 Resurrect */}
-      {exhumed && (
+      {(exhumed || (isCustom && customInputs)) && (
         <section className="animate-rise border-t border-line py-28">
           <StepHeader n="02" title="Resurrect" line="The same logic in modern Python. Money uses Decimal, never float, and cents are cut off exactly like the original." />
           {!python ? (
-            <ActionButton disabled={busy !== ""} onClick={() => run("resurrect", () => resurrect(sampleId!), (v) => setPython(v.python))}>
-              {busy === "resurrect" ? "Resurrecting" : "Resurrect"}
-            </ActionButton>
+            <div className="flex flex-wrap items-center gap-4">
+              <ActionButton disabled={busy !== ""} onClick={() => run("resurrect", () => resurrect(source!), (v) => setPython(v.python))}>
+                {busy === "resurrect" ? "Resurrecting" : "Resurrect"}
+              </ActionButton>
+              {isCustom && (
+                <ActionButton quiet disabled={busy !== ""} onClick={() => setPython(PYTHON_STUB)}>
+                  Write the Python myself
+                </ActionButton>
+              )}
+            </div>
           ) : (
             <div className="animate-rise">
               <div className="overflow-hidden rounded-lg border border-line bg-white">
@@ -269,7 +379,10 @@ export default function Necromancer() {
         <section className="animate-rise border-t border-line py-28">
           <StepHeader n="03" title="Seance" line="Run the old program and the new one on the same inputs, over and over. A translation is only trusted if every answer matches." />
           <div className="flex flex-wrap items-center gap-6">
-            <ActionButton disabled={busy !== ""} onClick={() => run("seance", () => seance(sampleId!, python, cases), setResult)}>
+            <ActionButton
+              disabled={busy !== "" || (isCustom && !customInputs)}
+              onClick={() => run("seance", () => seance(source!, python, cases, isCustom ? customInputs! : undefined), setResult)}
+            >
               {busy === "seance" ? "Running both programs" : "Hold the seance"}
             </ActionButton>
             <label className="flex items-center gap-3 text-sm text-muted">
@@ -284,6 +397,9 @@ export default function Necromancer() {
             </label>
           </div>
 
+          {isCustom && !customInputs && (
+            <p className="mt-4 text-sm text-muted">Find your program's inputs in step 01 first.</p>
+          )}
           {result && (
             <div className="animate-rise mt-16">
               <p className="headline text-[clamp(4rem,12vw,10rem)]">

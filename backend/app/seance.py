@@ -15,7 +15,7 @@ from decimal import Decimal
 from hypothesis import HealthCheck, Phase, given, settings
 from hypothesis import strategies as st
 
-from .cobol_runner import CompiledCobol
+from .cobol_runner import CobolError, CompiledCobol
 from .python_runner import run_python_batch
 
 
@@ -60,19 +60,33 @@ def generate_cases(spec: list[dict], n: int, seed: int = 0) -> list[list[str]]:
 
 def run_seance(cobol_source: str, python_source: str, spec: list[dict], n: int = 200) -> dict:
     cases = generate_cases(spec, n)
+    cobol_out: list[list[str] | None] = []
+    cobol_err: list[str | None] = []
     with CompiledCobol(cobol_source) as program:
-        cobol_out = [program.run(c) for c in cases]
+        failures = 0
+        for case in cases:
+            try:
+                cobol_out.append(program.run(case))
+                cobol_err.append(None)
+            except CobolError as exc:
+                # A hang or crash in the old program is itself a finding.
+                cobol_out.append(None)
+                cobol_err.append(str(exc))
+                failures += 1
+                if failures >= 5:
+                    break
+    cases = cases[: len(cobol_out)]
     py_out = run_python_batch(python_source, cases)
 
     spirits = []
-    for case, expected, got in zip(cases, cobol_out, py_out):
+    for case, expected, err, got in zip(cases, cobol_out, cobol_err, py_out):
         actual = got.get("ok")
-        if actual != expected:
+        if err or actual != expected:
             spirits.append({
                 "inputs": case,
                 "cobol": expected,
                 "python": actual,
-                "error": got.get("error"),
+                "error": err or got.get("error"),
             })
     return {
         "cases_run": len(cases),
