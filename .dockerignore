@@ -1,0 +1,8 @@
+.git
+frontend
+docs
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.hypothesis
+.env

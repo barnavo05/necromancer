@@ -14,6 +14,13 @@ The seance is the point. A translation is never shown as correct unless it has b
 
 Built for **Kiroween 2026**, Resurrection category, with Kiro.
 
+## What it looks like
+
+![Hero](docs/screenshots/01-hero.png)
+![Exhume, with a paragraph highlighted in the green screen](docs/screenshots/02-exhume.png)
+![Seance, verified](docs/screenshots/03-seance-verified.png)
+![A restless spirit, COBOL and Python side by side](docs/screenshots/04-restless-spirits.png)
+
 ## Run it
 
 You need Python 3.11+, Node 20+ and GnuCOBOL (`cobc`). The backend Docker image installs GnuCOBOL for you.
@@ -34,6 +41,8 @@ npm run dev
 Open http://localhost:3000. The three bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
 
 To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
+
+Deploying: see [docs/DEPLOY.md](docs/DEPLOY.md). CI runs the tests and the frontend build on every push.
 
 Docker, from the repo root:
 

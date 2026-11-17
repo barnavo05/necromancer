@@ -1,0 +1,15 @@
+# Render Blueprint for the backend. Create it from the Render dashboard:
+# New > Blueprint > pick this repo. Then set the two secret values below.
+services:
+  - type: web
+    name: necromancer-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    plan: free
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false   # your Vercel URL, for example https://necromancer.vercel.app
