@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Run backend tests on save",
+  "description": "When backend code or a COBOL sample changes, run the test suite so a broken translation is caught immediately.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["backend/app/**/*.py", "backend/tests/**/*.py", "samples/**/*"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A backend file or a COBOL sample just changed. Run `cd backend && python3 -m pytest -q`. If anything fails, show the failing test and the smallest fix. If a Seance test reports restless spirits, show one COBOL output next to the Python output and explain which COBOL rule (truncation, overflow, or input parsing) the translation missed. Do not edit samples/*.cbl unless the user asks."
+  }
+}

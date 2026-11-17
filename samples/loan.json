@@ -1,0 +1,38 @@
+{
+  "name": "Loan repayment",
+  "program": "LOAN",
+  "summary": "Simulates a loan month by month: adds interest at rate divided by 12, subtracts the fixed payment, and counts the months until the balance reaches zero. Gives up after 360 months and reports the total paid and a status.",
+  "inputs": [
+    {
+      "name": "amount",
+      "digits": 7,
+      "scale": 2,
+      "min": "0",
+      "max": "50000"
+    },
+    {
+      "name": "rate",
+      "digits": 2,
+      "scale": 2,
+      "min": "0",
+      "max": "25"
+    },
+    {
+      "name": "payment",
+      "digits": 7,
+      "scale": 2,
+      "min": "0",
+      "max": "5000"
+    }
+  ],
+  "paragraphs": [
+    {
+      "name": "MAIN-PARA",
+      "explanation": "Reads the loan amount, annual rate and monthly payment, then repeats the monthly step until the balance hits zero or 360 months pass. Reports months, total paid and whether the loan was repaid."
+    },
+    {
+      "name": "MONTH-PARA",
+      "explanation": "Adds one month of interest (rate divided by 12, cut off at cents), then applies the payment. If the payment covers the whole balance, only the balance is paid and the loan closes. Counts the month."
+    }
+  ]
+}

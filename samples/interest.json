@@ -3,8 +3,36 @@
   "program": "INTEREST",
   "summary": "Takes a deposit, an annual rate and a number of years, compounds the balance once a year (truncating to cents each year, as the COBOL does), and reports the final balance and the interest earned.",
   "inputs": [
-    {"name": "principal", "digits": 7, "scale": 2, "min": "0", "max": "100000"},
-    {"name": "rate", "digits": 2, "scale": 2, "min": "0", "max": "20"},
-    {"name": "years", "digits": 2, "scale": 0, "min": "0", "max": "30"}
+    {
+      "name": "principal",
+      "digits": 7,
+      "scale": 2,
+      "min": "0",
+      "max": "100000"
+    },
+    {
+      "name": "rate",
+      "digits": 2,
+      "scale": 2,
+      "min": "0",
+      "max": "20"
+    },
+    {
+      "name": "years",
+      "digits": 2,
+      "scale": 0,
+      "min": "0",
+      "max": "30"
+    }
+  ],
+  "paragraphs": [
+    {
+      "name": "MAIN-PARA",
+      "explanation": "Reads the principal, the yearly rate and the number of years. Copies the principal into the running balance, compounds it once per year, then reports the final balance and the interest earned."
+    },
+    {
+      "name": "COMPOUND-PARA",
+      "explanation": "Runs once per year. Multiplies the balance by one plus the rate divided by 100. The result is stored with two decimals and anything beyond the cents is cut off, not rounded."
+    }
   ]
 }

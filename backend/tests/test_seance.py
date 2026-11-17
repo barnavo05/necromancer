@@ -90,3 +90,65 @@ def test_seance_endpoint():
 def test_seance_endpoint_rejects_broken_python():
     res = client.post("/api/seance", json={"sample_id": "interest", "python": "def nope(:", "cases": 5})
     assert res.status_code == 422
+
+
+# All bundled samples, Exhume, Resurrect
+
+SAMPLE_IDS = sorted(p.stem for p in SAMPLES.glob("*.json"))
+
+
+@pytest.mark.parametrize("sample_id", SAMPLE_IDS)
+def test_every_sample_is_verified(sample_id):
+    res = client.post("/api/seance", json={"sample_id": sample_id, "cases": 100})
+    assert res.status_code == 200
+    assert res.json()["verified"] is True, res.json()["restless_spirits"][:1]
+
+
+def test_three_samples_exist():
+    assert SAMPLE_IDS == ["interest", "loan", "payroll"]
+
+
+@pytest.mark.parametrize("sample_id", SAMPLE_IDS)
+def test_bundled_exhume_and_resurrect(sample_id):
+    ex = client.post("/api/exhume", json={"sample_id": sample_id}).json()
+    assert ex["source"] == "bundled" and ex["paragraphs"]
+    re_ = client.post("/api/resurrect", json={"sample_id": sample_id}).json()
+    assert "def main" in re_["python"]
+
+
+def test_custom_cobol_without_key_is_503(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    res = client.post("/api/exhume", json={"cobol": "       IDENTIFICATION DIVISION."})
+    assert res.status_code == 503
+
+
+def test_exhume_and_resurrect_with_mocked_model(monkeypatch):
+    from app import llm
+
+    replies = iter([
+        '```json\n{"summary": "Adds numbers.", "paragraphs": [{"name": "MAIN", "explanation": "Adds."}]}\n```',
+        "```python\ndef main(lines):\n    return []\n```",
+    ])
+    monkeypatch.setattr(llm, "complete", lambda *a, **k: next(replies))
+    ex = client.post("/api/exhume", json={"cobol": "X"}).json()
+    assert ex["source"] == "model" and ex["summary"] == "Adds numbers."
+    py = client.post("/api/resurrect", json={"cobol": "X"}).json()
+    assert py["python"].startswith("def main")
+
+
+def test_resurrect_rejects_model_output_without_main(monkeypatch):
+    from app import llm
+
+    monkeypatch.setattr(llm, "complete", lambda *a, **k: "print('hi')")
+    assert client.post("/api/resurrect", json={"cobol": "X"}).status_code == 503
+
+
+def test_custom_seance_validates_input_spec():
+    bad = {"cobol": COBOL, "python": PYTHON, "inputs": [{"name": "x", "digits": 2, "scale": 0, "min": "abc", "max": "9"}]}
+    assert client.post("/api/seance", json=bad).status_code == 422
+
+
+def test_custom_seance_with_own_spec():
+    body = {"cobol": COBOL, "python": PYTHON, "inputs": META["inputs"], "cases": 30}
+    res = client.post("/api/seance", json=body)
+    assert res.status_code == 200 and res.json()["verified"] is True

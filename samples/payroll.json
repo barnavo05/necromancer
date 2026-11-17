@@ -1,0 +1,39 @@
+{
+  "name": "Weekly payroll",
+  "program": "PAYROLL",
+  "summary": "Computes weekly gross pay from hours and hourly rate, paying hours over 40 at time and a half, then taxes the part of gross above 500.00 at 20 percent and reports gross, tax and net.",
+  "inputs": [
+    {
+      "name": "hours",
+      "digits": 3,
+      "scale": 1,
+      "min": "0",
+      "max": "100"
+    },
+    {
+      "name": "rate",
+      "digits": 3,
+      "scale": 2,
+      "min": "0",
+      "max": "500"
+    }
+  ],
+  "paragraphs": [
+    {
+      "name": "MAIN-PARA",
+      "explanation": "Reads hours and hourly rate, runs the three steps below, subtracts tax from gross to get net pay, and prints gross, tax and net."
+    },
+    {
+      "name": "SPLIT-HOURS-PARA",
+      "explanation": "Splits hours into regular hours (up to 40) and overtime hours (everything above 40)."
+    },
+    {
+      "name": "GROSS-PARA",
+      "explanation": "Pays regular hours at the rate and overtime hours at 1.5 times the rate. The total is cut off at cents."
+    },
+    {
+      "name": "TAX-PARA",
+      "explanation": "If gross pay is over 500.00, taxes the excess at 20 percent. Otherwise no tax is due."
+    }
+  ]
+}

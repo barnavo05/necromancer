@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { background: #F6F4EE; color: #111310; }
+body { -webkit-font-smoothing: antialiased; }
+::selection { background: #2BD46B; color: #0A0E0B; }
+.headline { letter-spacing: -0.045em; line-height: 0.95; font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .animate-rise { animation: none; } }
