@@ -20,6 +20,20 @@ Built for **Kiroween 2026**, Resurrection category, with Kiro.
 ![Exhume, with a paragraph highlighted in the green screen](docs/screenshots/02-exhume.png)
 ![Seance, verified](docs/screenshots/03-seance-verified.png)
 ![A restless spirit, COBOL and Python side by side](docs/screenshots/04-restless-spirits.png)
+![Autopsy, the COBOL gotchas found in this program](docs/screenshots/05-autopsy.png)
+![Haunted, injected bugs caught by the seance](docs/screenshots/06-haunted.png)
+![Smallest failing input, shrunk from every failure](docs/screenshots/07-smallest-failing-input.png)
+
+## What makes the proof strong
+
+The seance is not a handful of hand picked examples. It is built to be hard to fool.
+
+- **Boundary hunter.** Constants are read straight out of the COBOL (40 hours, 100 items, a 0.0825 tax rate) and every one is tested exactly and one step either side, because that is where translations break.
+- **Smallest failing input.** Every failure is shrunk to the simplest case that still disagrees. A bad invoice port fails on one item costing 7 cents: COBOL charges 0.01 tax, the Python charges 0.00.
+- **Haunt.** Necromancer injects bugs into the translation on its own (rounding mode swapped, `>` becomes `>=`, a rate nudged by one digit) and reports how many the seance catches. Survivors are shown, not hidden, with a second pass of 500 extra random inputs before one is called harmless.
+- **Autopsy.** A static check lists what will bite a translation in this program: silent truncation, `ROUNDED`, silent overflow, unsigned fields, wrapping loop counters, `EVALUATE` order. No model needed.
+- **Certificate.** A verified run can be downloaded as JSON: SHA 256 of both programs, the input ranges, the edges tested, the compiler version and the counts. It identifies exactly what was verified.
+- **Exorcise.** When the seance fails, the model reads the restless spirits, repairs the Python, and the seance runs again, up to three rounds. This is the one feature that needs the API key. Its loop is tested with a mocked model and has not been run against a live model from this repo yet.
 
 ## Run it
 
@@ -84,6 +98,9 @@ Three real COBOL traps showed up while building this, and the seance is what exp
 |---|---|
 | `GET /api/health` | Liveness |
 | `GET /api/samples`, `GET /api/samples/{id}` | Bundled programs |
+| `POST /api/autopsy` | Static findings: what will bite a translation of this COBOL |
+| `POST /api/haunt` | Inject bugs into the Python and report how many the seance catches |
+| `POST /api/exorcise` | Model repairs a failing translation, seance re-runs (needs API key) |
 | `POST /api/infer-inputs` | Detect a program's inputs (ACCEPT plus NUMVAL) and safe default ranges |
 | `POST /api/exhume` | Plain English explanation (bundled sample or custom COBOL via the model) |
 | `POST /api/resurrect` | Python translation (bundled sample or custom COBOL via the model) |

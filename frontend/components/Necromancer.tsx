@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  exhume, getSample, inferInputs, listSamples, resurrect, seance,
-  type Exhumed, type InputSpec, type Sample, type SampleSummary, type SeanceResult, type Source, type Spirit,
+  autopsy, exhume, exorcise, getSample, haunt, inferInputs, listSamples, resurrect, seance,
+  type Exhumed, type Finding, type Haunted, type InputSpec, type Sample, type SampleSummary,
+  type SeanceResult, type Source, type Spirit,
 } from "@/lib/api";
 
 const CUSTOM = "__custom__";
@@ -143,6 +144,71 @@ function RestlessSpirit({ spirit, names }: { spirit: Spirit; names: string[] }) 
   );
 }
 
+function downloadCertificate(result: SeanceResult, name: string) {
+  const blob = new Blob([JSON.stringify(result.certificate, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `necromancer-certificate-${name}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function differingLine(s: Spirit | null): string | null {
+  if (!s || !s.cobol || !s.python) return s?.error ?? null;
+  const i = s.cobol.findIndex((l, k) => l !== s.python![k]);
+  return i < 0 ? null : `COBOL ${s.cobol[i]}   Python ${s.python[i]}`;
+}
+
+function AutopsyList({ findings }: { findings: Finding[] }) {
+  if (!findings.length) return null;
+  return (
+    <div className="animate-rise mt-24">
+      <p className="font-mono text-sm tracking-wide text-muted">AUTOPSY</p>
+      <h3 className="headline mt-3 text-4xl sm:text-5xl">
+        {findings.length} things in this program will bite a translation.
+      </h3>
+      <ul className="mt-10 grid gap-x-12 gap-y-8 sm:grid-cols-2">
+        {findings.map((f, i) => (
+          <li key={i} className="border-t border-line pt-4">
+            <p className="font-mono text-xs uppercase tracking-wider text-muted">{f.where}</p>
+            <p className="mt-2 text-lg font-bold tracking-tight">{f.title}</p>
+            <p className="mt-1 text-muted">{f.detail}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function HauntPanel({ haunted }: { haunted: Haunted }) {
+  return (
+    <div className="animate-rise mt-20 border-t border-line pt-16">
+      <p className="font-mono text-sm tracking-wide text-muted">HAUNTED</p>
+      <p className="headline mt-3 text-[clamp(3rem,9vw,7rem)]">
+        {haunted.caught}<span className="text-muted"> / {haunted.total}</span>
+      </p>
+      <p className="mt-3 text-2xl tracking-tight">injected bugs caught by the seance.</p>
+      <p className="mt-3 max-w-2xl text-muted">
+        We broke the translation on purpose, one small change at a time, and ran the seance on each broken copy.
+        {haunted.survived > 0 &&
+          ` ${haunted.survived} survived even ${haunted.stress_cases} extra random inputs. That usually means the change did not alter the answer (for example > versus >= where both branches agree), or the difference hides in a very narrow range.`}
+      </p>
+      <ul className="mt-10 divide-y divide-line border-y border-line">
+        {haunted.mutants.map((m, i) => (
+          <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-4">
+            <span className="font-mono text-sm">{m.description}</span>
+            <span className={`font-mono text-sm ${m.status === "survived" ? "text-muted" : "font-bold"}`}>
+              {m.status === "survived" ? "survived" : m.status === "caught_on_stress" ? "caught (extra inputs)" : "caught"}
+              {m.example && differingLine(m.example) ? `, ${differingLine(m.example)}` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function Necromancer() {
   const [samples, setSamples] = useState<SampleSummary[]>([]);
   const [sampleId, setSampleId] = useState<string | null>(null);
@@ -151,9 +217,12 @@ export default function Necromancer() {
   const [python, setPython] = useState<string | null>(null);
   const [result, setResult] = useState<SeanceResult | null>(null);
   const [cases, setCases] = useState(200);
-  const [busy, setBusy] = useState<"" | "exhume" | "resurrect" | "seance">("");
+  const [busy, setBusy] = useState<"" | "exhume" | "resurrect" | "seance" | "haunt" | "exorcise">("");
   const [error, setError] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [haunted, setHaunted] = useState<Haunted | null>(null);
+  const [exorcism, setExorcism] = useState<string | null>(null);
   const [customCobol, setCustomCobol] = useState("");
   const [customInputs, setCustomInputs] = useState<InputSpec[] | null>(null);
 
@@ -169,7 +238,7 @@ export default function Necromancer() {
 
   useEffect(() => {
     if (!sampleId) return;
-    setSample(null); setExhumed(null); setPython(null); setResult(null); setError(null);
+    setSample(null); setExhumed(null); setPython(null); setResult(null); setHaunted(null); setExorcism(null); setError(null);
     if (sampleId === CUSTOM) return;
     getSample(sampleId).then(setSample).catch((e) => setError(e.message));
   }, [sampleId]);
@@ -177,10 +246,18 @@ export default function Necromancer() {
   const ranges = useMemo(() => paragraphRanges(cobolText), [cobolText]);
   const activeRange = ranges.find((r) => r.name === hovered) ?? null;
 
-  async function run<T>(kind: "exhume" | "resurrect" | "seance", fn: () => Promise<T>, done: (v: T) => void) {
+  async function run<T>(kind: "exhume" | "resurrect" | "seance" | "haunt" | "exorcise", fn: () => Promise<T>, done: (v: T) => void) {
     setBusy(kind); setError(null);
     try { done(await fn()); } catch (e) { setError((e as Error).message); } finally { setBusy(""); }
   }
+
+  useEffect(() => {
+    setFindings([]);
+    if (!source) return;
+    const t = setTimeout(() => { autopsy(source).then((r) => setFindings(r.findings)).catch(() => setFindings([])); }, isCustom ? 700 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sampleId, customCobol, sample]);
 
   const specInputs = isCustom ? customInputs : sample?.inputs ?? null;
   const inputNames: string[] = useMemo(() => specInputs?.map((f) => f.name) ?? [], [specInputs]);
@@ -329,6 +406,7 @@ export default function Necromancer() {
             )}
           </div>
         </div>
+        <AutopsyList findings={findings} />
       </section>
 
       {/* 02 Resurrect */}
@@ -352,7 +430,7 @@ export default function Necromancer() {
                 <div className="flex items-center justify-between border-b border-line px-4 py-2">
                   <span className="font-mono text-xs text-muted">translation.py (editable)</span>
                   <button
-                    onClick={() => { setPython(introduceBug(python)); setResult(null); }}
+                    onClick={() => { setPython(introduceBug(python)); setResult(null); setHaunted(null); setExorcism(null); }}
                     className="font-mono text-xs underline underline-offset-4 hover:text-muted"
                   >
                     Introduce a bug
@@ -360,7 +438,7 @@ export default function Necromancer() {
                 </div>
                 <textarea
                   value={python}
-                  onChange={(e) => { setPython(e.target.value); setResult(null); }}
+                  onChange={(e) => { setPython(e.target.value); setResult(null); setHaunted(null); setExorcism(null); }}
                   spellCheck={false}
                   aria-label="Python translation"
                   className="block h-[28rem] w-full resize-y bg-white p-4 font-mono text-[13px] leading-6 outline-none"
@@ -415,8 +493,43 @@ export default function Necromancer() {
                   <>Not verified. {result.spirit_count} restless {result.spirit_count === 1 ? "spirit" : "spirits"} found.</>
                 )}
               </p>
-              {!result.verified && (
-                <div className="mt-12 space-y-5">
+              {result.boundaries_tested.length > 0 && (
+                <p className="mt-4 max-w-2xl font-mono text-sm text-muted">
+                  Edges tested on purpose: {result.boundaries_tested.join(", ")} (and one step either side). These constants were read straight out of the COBOL.
+                </p>
+              )}
+
+              {result.verified ? (
+                <div className="mt-10 flex flex-wrap gap-3">
+                  <ActionButton disabled={busy !== "" || (isCustom && !customInputs)} onClick={() => run("haunt", () => haunt(source!, python, 150, isCustom ? customInputs! : undefined), setHaunted)}>
+                    {busy === "haunt" ? "Haunting" : "Haunt the translation"}
+                  </ActionButton>
+                  <ActionButton quiet onClick={() => downloadCertificate(result, sampleId ?? "program")}>
+                    Download certificate
+                  </ActionButton>
+                </div>
+              ) : (
+                <div className="mt-12 space-y-8">
+                  {result.minimal_spirit && (
+                    <div className="animate-rise">
+                      <p className="font-mono text-sm tracking-wide text-muted">SMALLEST FAILING INPUT</p>
+                      <p className="mt-2 max-w-2xl text-muted">
+                        Every failure was shrunk to the simplest case that still disagrees. Start here.
+                      </p>
+                      <div className="mt-4">
+                        <RestlessSpirit spirit={result.minimal_spirit} names={inputNames} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <ActionButton disabled={busy !== "" || (isCustom && !customInputs)} onClick={() => run("exorcise", () => exorcise(source!, python, cases, isCustom ? customInputs! : undefined), (r) => {
+                      setPython(r.python); setResult(r.result); setHaunted(null);
+                      setExorcism(`${r.verified ? "Exorcised" : "Still haunted"} after ${r.rounds.length} ${r.rounds.length === 1 ? "round" : "rounds"}: ${r.rounds.map((x) => `${x.matched}/${x.cases_run}`).join(" then ")}.`);
+                    })}>
+                      {busy === "exorcise" ? "Exorcising" : "Exorcise"}
+                    </ActionButton>
+                    <p className="max-w-md text-sm text-muted">The model reads the restless spirits, fixes the Python, and the seance runs again. Needs the server API key.</p>
+                  </div>
                   <p className="text-muted">
                     Showing {Math.min(5, result.restless_spirits.length)} of {result.spirit_count}. Bold underlined lines differ.
                   </p>
@@ -425,6 +538,8 @@ export default function Necromancer() {
                   ))}
                 </div>
               )}
+              {exorcism && <p className="animate-rise mt-8 font-mono text-sm">{exorcism}</p>}
+              {haunted && <HauntPanel haunted={haunted} />}
             </div>
           )}
         </section>

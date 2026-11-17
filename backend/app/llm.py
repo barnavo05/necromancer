@@ -71,3 +71,24 @@ def resurrect(cobol: str) -> str:
     if "def main" not in code:
         raise LLMUnavailable("The model did not return a main() function")
     return code
+
+
+REPAIR_SYSTEM = (
+    "You fix a Python translation of a COBOL program. You are given the COBOL, the current Python, "
+    "and inputs where the two programs printed different output. Find the COBOL rule the Python "
+    "missed (truncation versus ROUNDED, field overflow, loop counter wrap, unsigned fields, "
+    "EVALUATE order) and fix it. Keep main(lines: list[str]) -> list[str] and keep using Decimal. "
+    "Output only the full corrected Python code, no markdown fences, no explanation."
+)
+
+
+def repair(cobol: str, python: str, spirits: list[dict]) -> str:
+    cases = "\n".join(
+        f"inputs={s['inputs']} cobol_output={s['cobol']} python_output={s['python']} error={s['error']}"
+        for s in spirits[:5]
+    )
+    prompt = f"COBOL:\n{cobol}\n\nCurrent Python:\n{python}\n\nMismatches:\n{cases}"
+    code = _strip_fences(complete(REPAIR_SYSTEM, prompt, max_tokens=6000))
+    if "def main" not in code:
+        raise LLMUnavailable("The model did not return a main() function")
+    return code

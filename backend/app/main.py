@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 from . import llm
 from .cobol_runner import CobolError
+from .autopsy import autopsy as run_autopsy
 from .infer import infer_inputs
+from .mutate import haunt as run_haunt
 from .python_runner import PythonError
 from .seance import run_seance
 
@@ -92,6 +94,12 @@ def infer(req: CodeRequest) -> dict:
     return {"inputs": spec}
 
 
+@app.post("/api/autopsy")
+def autopsy_endpoint(req: CodeRequest) -> dict:
+    cobol, _ = _resolve_cobol(req)
+    return {"findings": run_autopsy(cobol)}
+
+
 @app.post("/api/exhume")
 def exhume(req: CodeRequest) -> dict:
     cobol, sample = _resolve_cobol(req)
@@ -134,3 +142,49 @@ def seance(req: SeanceRequest) -> dict:
         return run_seance(cobol, python_src, spec, req.cases)
     except (CobolError, PythonError) as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+def _seance_inputs(req: "SeanceRequest"):
+    sample = _load_sample(req.sample_id) if req.sample_id else None
+    cobol = req.cobol or (sample["cobol"] if sample else None)
+    python_src = req.python or (sample["python"] if sample else None)
+    spec = [f.model_dump() for f in req.inputs] if req.inputs else (sample["inputs"] if sample else None)
+    if not cobol or not python_src or not spec:
+        raise HTTPException(422, "Needs COBOL, Python and an input spec (or a sample_id)")
+    return cobol, python_src, spec
+
+
+@app.post("/api/haunt")
+def haunt(req: SeanceRequest) -> dict:
+    """Inject bugs into the translation and report how many the seance catches."""
+    cobol, python_src, spec = _seance_inputs(req)
+    try:
+        return run_haunt(cobol, python_src, spec, min(req.cases, 200))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except (CobolError, PythonError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+class ExorciseRequest(SeanceRequest):
+    max_rounds: int = Field(default=3, ge=1, le=5)
+
+
+@app.post("/api/exorcise")
+def exorcise(req: ExorciseRequest) -> dict:
+    """Let the model repair a failing translation, using the restless spirits as feedback."""
+    cobol, python_src, spec = _seance_inputs(req)
+    rounds = []
+    try:
+        for attempt in range(1, req.max_rounds + 1):
+            result = run_seance(cobol, python_src, spec, req.cases)
+            rounds.append({"attempt": attempt, "matched": result["matched"], "cases_run": result["cases_run"],
+                           "spirit_count": result["spirit_count"], "minimal_spirit": result["minimal_spirit"]})
+            if result["verified"] or attempt == req.max_rounds:
+                return {"verified": result["verified"], "python": python_src, "result": result, "rounds": rounds}
+            python_src = llm.repair(cobol, python_src, result["restless_spirits"])
+    except llm.LLMUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except (CobolError, PythonError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    raise HTTPException(500, "Unreachable")

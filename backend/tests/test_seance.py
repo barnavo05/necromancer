@@ -216,3 +216,98 @@ def test_invoice_truncating_the_rounded_tax_is_caught():
     result = run_seance(cobol, wrong, meta["inputs"], 150)
     assert result["verified"] is False
     assert any(s["cobol"][2] != s["python"][2] for s in result["restless_spirits"])
+
+
+# Autopsy, smallest failing input, certificate, boundary hunter, haunt, exorcise
+
+def test_autopsy_flags_the_real_traps():
+    findings = client.post("/api/autopsy", json={"sample_id": "invoice"}).json()["findings"]
+    kinds = {f["kind"] for f in findings}
+    assert {"rounds", "truncates", "order", "overflow", "constants"} <= kinds
+    loop = client.post("/api/autopsy", json={"sample_id": "interest"}).json()["findings"]
+    assert any(f["kind"] == "loop" and "wraps at 99" in f["title"] for f in loop)
+
+
+def test_autopsy_flags_accept_into_numeric():
+    risky = """       IDENTIFICATION DIVISION.
+       PROGRAM-ID. R.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-RATE PIC 9(2)V99.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           ACCEPT WS-RATE
+           DISPLAY WS-RATE
+           STOP RUN.
+"""
+    findings = client.post("/api/autopsy", json={"cobol": risky}).json()["findings"]
+    assert any(f["kind"] == "accept" for f in findings)
+
+
+def test_boundary_hunter_finds_constants_and_tests_both_sides():
+    from app.seance import boundary_literals
+
+    assert {str(b) for b in boundary_literals((SAMPLES / "payroll.cbl").read_text())} >= {"40", "1.5", "500", "0.20"}
+    spec = [{"name": "hours", "digits": 3, "scale": 1, "min": "0", "max": "100"}]
+    cases = {c[0] for c in generate_cases(spec, 400, boundaries=boundary_literals((SAMPLES / "payroll.cbl").read_text()))}
+    assert {"39.9", "40.0", "40.1"} <= cases
+
+
+def test_failures_shrink_to_a_tiny_input_and_certificate_is_issued():
+    meta = json.loads((SAMPLES / "invoice.json").read_text())
+    cobol = (SAMPLES / "invoice.cbl").read_text()
+    py = (SAMPLES / "invoice.py").read_text()
+    wrong = py.replace("ROUND_HALF_UP)", "ROUND_DOWN)")
+    result = run_seance(cobol, wrong, meta["inputs"], 200)
+    minimal = result["minimal_spirit"]
+    assert minimal and minimal["cobol"] != minimal["python"]
+    assert minimal["inputs"] == ["1", "0.07"]
+    good = run_seance(cobol, py, meta["inputs"], 60)
+    cert = good["certificate"]
+    assert cert["verified"] is True and len(cert["cobol_sha256"]) == 64 and len(cert["python_sha256"]) == 64
+    assert cert["cobol_compiler"].startswith("cobc")
+
+
+@pytest.mark.parametrize("sample_id", SAMPLE_IDS)
+def test_haunt_catches_most_injected_bugs(sample_id):
+    res = client.post("/api/haunt", json={"sample_id": sample_id, "cases": 100})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["total"] >= 3
+    assert body["caught"] / body["total"] >= 0.6
+    assert all(m["status"] in {"caught", "caught_on_stress", "survived"} for m in body["mutants"])
+
+
+def test_haunt_refuses_a_translation_that_already_fails():
+    bad = PYTHON.replace("ROUND_DOWN)", "ROUND_HALF_UP)").replace(
+        "from decimal import Decimal, ROUND_DOWN,", "from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN,")
+    res = client.post("/api/haunt", json={"sample_id": "interest", "python": bad, "cases": 80})
+    assert res.status_code == 422
+
+
+def test_exorcise_repairs_a_bad_translation_with_a_mocked_model(monkeypatch):
+    from app import llm
+
+    bad = PYTHON.replace("ROUND_DOWN)", "ROUND_HALF_UP)").replace(
+        "from decimal import Decimal, ROUND_DOWN,", "from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN,")
+    seen = {}
+
+    def fake_repair(cobol, python, spirits):
+        seen["spirits"] = spirits
+        return PYTHON
+
+    monkeypatch.setattr(llm, "repair", fake_repair)
+    res = client.post("/api/exorcise", json={"sample_id": "interest", "python": bad, "cases": 60})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["verified"] is True
+    assert len(body["rounds"]) == 2 and body["rounds"][0]["spirit_count"] > 0
+    assert seen["spirits"]
+
+
+def test_exorcise_without_a_key_is_503(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    bad = PYTHON.replace("ROUND_DOWN)", "ROUND_HALF_UP)").replace(
+        "from decimal import Decimal, ROUND_DOWN,", "from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN,")
+    res = client.post("/api/exorcise", json={"sample_id": "interest", "python": bad, "cases": 40})
+    assert res.status_code == 503
