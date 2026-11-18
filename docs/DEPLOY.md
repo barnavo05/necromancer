@@ -22,5 +22,5 @@ Railway also works: create a service from the repo, set the Dockerfile path to `
 ## Checklist before you record
 
 - Health URL answers
-- Open the site, run the seance on all three samples, then Introduce a bug and run it again
+- Open the site, run the seance on all four samples, then Introduce a bug and run it again
 - Browser console is clean
