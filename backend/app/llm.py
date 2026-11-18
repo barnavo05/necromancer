@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 
 import httpx
 
@@ -15,13 +16,39 @@ class LLMUnavailable(Exception):
     pass
 
 
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+RETRY_DELAYS = (2, 5, 10)
+
+
+def _post(url: str, headers: dict, payload: dict):
+    """POST with a few retries on temporary errors, which free tiers return often."""
+    resp = None
+    for delay in (*RETRY_DELAYS, None):
+        resp = httpx.post(url, headers=headers, json=payload, timeout=90)
+        if resp.status_code not in RETRY_STATUSES or delay is None:
+            break
+        time.sleep(delay)
+    return resp
+
+
+def _failure(resp) -> LLMUnavailable:
+    detail = ""
+    try:
+        body = resp.json()
+        err = body[0] if isinstance(body, list) and body else body
+        detail = str((err.get("error") or {}).get("message") or "")[:160]
+    except Exception:
+        pass
+    return LLMUnavailable(f"Model request failed ({resp.status_code}){': ' + detail if detail else ''}")
+
+
 def _complete_openai_compatible(system: str, user: str, max_tokens: int) -> str:
     """Any OpenAI compatible chat endpoint, for example the free tiers of Gemini or Groq."""
     base = os.environ["LLM_BASE_URL"].rstrip("/")
-    resp = httpx.post(
+    resp = _post(
         f"{base}/chat/completions",
-        headers={"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"},
-        json={
+        {"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"},
+        {
             "model": os.environ.get("LLM_MODEL", ""),
             "max_tokens": max_tokens,
             "messages": [
@@ -29,10 +56,9 @@ def _complete_openai_compatible(system: str, user: str, max_tokens: int) -> str:
                 {"role": "user", "content": user},
             ],
         },
-        timeout=90,
     )
     if resp.status_code != 200:
-        raise LLMUnavailable(f"Model request failed ({resp.status_code})")
+        raise _failure(resp)
     try:
         return resp.json()["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError, ValueError) as exc:
@@ -46,19 +72,18 @@ def complete(system: str, user: str, max_tokens: int = 4000) -> str:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise LLMUnavailable("No model key is set on the server")
-    resp = httpx.post(
+    resp = _post(
         API_URL,
-        headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-        json={
+        {"x-api-key": key, "anthropic-version": "2023-06-01"},
+        {
             "model": os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL),
             "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": user}],
         },
-        timeout=90,
     )
     if resp.status_code != 200:
-        raise LLMUnavailable(f"Model request failed ({resp.status_code})")
+        raise _failure(resp)
     return "".join(b.get("text", "") for b in resp.json().get("content", []))
 
 
