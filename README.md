@@ -14,6 +14,8 @@ The seance is the point. A translation is never shown as correct unless it has b
 
 Built for **Kiroween 2026**, Resurrection category, with Kiro.
 
+**Live demo:** https://necromancer-tau.vercel.app (the backend sleeps when idle, so the first request can take up to a minute).
+
 ## What it looks like
 
 ![Hero](docs/screenshots/01-hero.png)
@@ -52,7 +54,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The three bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
+Open http://localhost:3000. The four bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
 
 To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
 
