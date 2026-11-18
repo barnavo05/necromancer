@@ -15,10 +15,37 @@ class LLMUnavailable(Exception):
     pass
 
 
+def _complete_openai_compatible(system: str, user: str, max_tokens: int) -> str:
+    """Any OpenAI compatible chat endpoint, for example the free tiers of Gemini or Groq."""
+    base = os.environ["LLM_BASE_URL"].rstrip("/")
+    resp = httpx.post(
+        f"{base}/chat/completions",
+        headers={"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"},
+        json={
+            "model": os.environ.get("LLM_MODEL", ""),
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        },
+        timeout=90,
+    )
+    if resp.status_code != 200:
+        raise LLMUnavailable(f"Model request failed ({resp.status_code})")
+    try:
+        return resp.json()["choices"][0]["message"]["content"] or ""
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise LLMUnavailable("The model returned an unreadable reply") from exc
+
+
 def complete(system: str, user: str, max_tokens: int = 4000) -> str:
+    # Optional free provider: set LLM_API_KEY, LLM_BASE_URL and LLM_MODEL.
+    if os.environ.get("LLM_API_KEY") and os.environ.get("LLM_BASE_URL"):
+        return _complete_openai_compatible(system, user, max_tokens)
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        raise LLMUnavailable("No ANTHROPIC_API_KEY is set on the server")
+        raise LLMUnavailable("No model key is set on the server")
     resp = httpx.post(
         API_URL,
         headers={"x-api-key": key, "anthropic-version": "2023-06-01"},

@@ -5,7 +5,7 @@ Two pieces: the backend (Docker, needs GnuCOBOL) and the frontend (Vercel).
 ## 1. Backend on Render
 
 1. In Render, choose New, then Blueprint, and pick this repo. It reads `render.yaml`.
-2. Set `ANTHROPIC_API_KEY` (only needed for your own COBOL, the bundled samples work without it).
+2. Model key (only needed for your own COBOL and Exorcise, the bundled samples work without it). Set `ANTHROPIC_API_KEY`, or for a free option set `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` (see `.env.example`). If both are set, the `LLM_*` settings win.
 3. Set `CORS_ORIGINS` to your frontend URL once you have it (step 2).
 4. Wait for the deploy, then open `https://<your-service>.onrender.com/api/health`. It should say `{"status":"alive"}`.
 
