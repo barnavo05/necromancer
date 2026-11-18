@@ -81,3 +81,35 @@ def test_failure_message_includes_provider_detail(monkeypatch):
     monkeypatch.setattr(httpx, "post", lambda *a, **k: _Resp(404, {"error": {"message": "model not found"}}))
     with pytest.raises(llm.LLMUnavailable, match="404.*model not found"):
         llm.complete("s", "u")
+
+
+def test_model_list_falls_through_to_the_next_model(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("LLM_MODEL", "busy-model, retired-model, good-model")
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    seen = []
+
+    def post(url, headers, json, timeout=None):
+        seen.append(json["model"])
+        if json["model"] == "busy-model":
+            return _Resp(503, {"error": {"message": "high demand"}})
+        if json["model"] == "retired-model":
+            return _Resp(404, {"error": {"message": "not found"}})
+        return _Resp(200, {"choices": [{"message": {"content": "fine"}}]})
+
+    monkeypatch.setattr(httpx, "post", post)
+    assert llm.complete("s", "u") == "fine"
+    assert seen == ["busy-model", "retired-model", "good-model"]
+
+
+def test_all_models_failing_raises_the_last_error(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "k")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("LLM_MODEL", "a,b")
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Resp(503, {"error": {"message": "busy"}}))
+    with pytest.raises(llm.LLMUnavailable, match="503.*busy"):
+        llm.complete("s", "u")

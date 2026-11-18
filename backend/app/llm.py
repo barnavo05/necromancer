@@ -20,10 +20,10 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 RETRY_DELAYS = (2, 5, 10)
 
 
-def _post(url: str, headers: dict, payload: dict):
+def _post(url: str, headers: dict, payload: dict, retry: bool = True):
     """POST with a few retries on temporary errors, which free tiers return often."""
     resp = None
-    for delay in (*RETRY_DELAYS, None):
+    for delay in (*RETRY_DELAYS, None) if retry else (None,):
         resp = httpx.post(url, headers=headers, json=payload, timeout=90)
         if resp.status_code not in RETRY_STATUSES or delay is None:
             break
@@ -43,26 +43,38 @@ def _failure(resp) -> LLMUnavailable:
 
 
 def _complete_openai_compatible(system: str, user: str, max_tokens: int) -> str:
-    """Any OpenAI compatible chat endpoint, for example the free tiers of Gemini or Groq."""
+    """Any OpenAI compatible chat endpoint, for example the free tiers of Gemini or Groq.
+
+    LLM_MODEL may hold several model names separated by commas. They are tried in order,
+    so a busy or retired model falls through to the next one.
+    """
     base = os.environ["LLM_BASE_URL"].rstrip("/")
-    resp = _post(
-        f"{base}/chat/completions",
-        {"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"},
-        {
-            "model": os.environ.get("LLM_MODEL", ""),
-            "max_tokens": max_tokens,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
-    )
-    if resp.status_code != 200:
-        raise _failure(resp)
-    try:
-        return resp.json()["choices"][0]["message"]["content"] or ""
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise LLMUnavailable("The model returned an unreadable reply") from exc
+    models = [m.strip() for m in os.environ.get("LLM_MODEL", "").split(",") if m.strip()] or [""]
+    last: LLMUnavailable | None = None
+    for model in models:
+        resp = _post(
+            f"{base}/chat/completions",
+            {"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"},
+            {
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            },
+            retry=len(models) == 1,
+        )
+        if resp.status_code != 200:
+            last = _failure(resp)
+            continue
+        try:
+            return resp.json()["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            last = LLMUnavailable("The model returned an unreadable reply")
+            last.__cause__ = exc
+    assert last is not None
+    raise last
 
 
 def complete(system: str, user: str, max_tokens: int = 4000) -> str:
