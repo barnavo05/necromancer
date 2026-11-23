@@ -1,0 +1,12 @@
+{
+  "name": "Balance difference",
+  "program": "BALANCE",
+  "summary": "Works out the difference between the amount paid and the amount owed and says whether the account is settled or owing. The difference is stored in an unsigned field, so when the customer owes more than they paid, COBOL silently drops the minus sign and prints the absolute value.",
+  "inputs": [
+    {"name": "paid", "digits": 4, "scale": 2, "min": "0", "max": "9999"},
+    {"name": "owed", "digits": 4, "scale": 2, "min": "0", "max": "9999"}
+  ],
+  "paragraphs": [
+    {"name": "MAIN-PARA", "explanation": "Reads the amount paid and the amount owed, subtracts one from the other into an unsigned field, prints the difference, then prints SETTLED if the payment covers the amount owed and OWING if not. Because the field has no sign, a shortfall prints as a positive number, and only the status line tells you which way it went."}
+  ]
+}

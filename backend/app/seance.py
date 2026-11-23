@@ -37,10 +37,12 @@ MAX_COBOL_FAILURES = 5
 
 def format_value(n: int, scale: int) -> str:
     """Plain decimal text for a scaled integer, e.g. (3579, 2) -> "35.79"."""
+    sign = "-" if n < 0 else ""
+    n = abs(n)
     if scale == 0:
-        return str(n)
+        return f"{sign}{n}"
     factor = 10 ** scale
-    return f"{n // factor}.{n % factor:0{scale}d}"
+    return f"{sign}{n // factor}.{n % factor:0{scale}d}"
 
 
 def parse_value(text: str, scale: int) -> int:
@@ -71,9 +73,10 @@ def field_strategy(field: dict, boundaries: list[Decimal] | None = None) -> st.S
     edge_values = {lo, hi, min(lo + 1, hi), max(hi - 1, lo)}
     for b in boundaries or []:
         n = int(b * factor)
-        for candidate in (n - 1, n, n + 1):
-            if lo <= candidate <= hi:
-                edge_values.add(candidate)
+        for base in (n, -n):  # a signed field can also cross the threshold on the negative side
+            for candidate in (base - 1, base, base + 1):
+                if lo <= candidate <= hi:
+                    edge_values.add(candidate)
     edges = st.sampled_from(sorted(edge_values))
     body = st.one_of(edges, st.integers(min_value=lo, max_value=hi))
     return body.map(lambda n: format_value(n, scale))

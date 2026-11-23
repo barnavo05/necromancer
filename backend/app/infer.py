@@ -17,6 +17,12 @@ _PIC = re.compile(
     r"^\s*\d+\s+([A-Z0-9-]+)\s+PIC\s+(?:9\((\d+)\)|(9+))(?:V(?:9\((\d+)\)|(9+)))?\s*(?:VALUE\s+\S+)?\s*\.\s*$",
     re.I,
 )
+# Same as _PIC but also accepts a leading S (signed field). Kept separate so the
+# Autopsy, which relies on _fields being unsigned only, is unchanged.
+_PIC_ANY = re.compile(
+    r"^\s*\d+\s+([A-Z0-9-]+)\s+PIC\s+(S?)(?:9\((\d+)\)|(9+))(?:V(?:9\((\d+)\)|(9+)))?\s*(?:VALUE\s+\S+)?\s*\.\s*$",
+    re.I,
+)
 _ACCEPT = re.compile(r"^\s*ACCEPT\s+([A-Z0-9-]+)\s*$", re.I)
 _NUMVAL = re.compile(r"COMPUTE\s+([A-Z0-9-]+)\s*=\s*FUNCTION\s+NUMVAL\s*\(\s*([A-Z0-9-]+)\s*\)", re.I)
 
@@ -39,8 +45,22 @@ def _fields(cobol: str) -> dict[str, tuple[int, int]]:
     return out
 
 
+def _fields_signed(cobol: str) -> dict[str, tuple[int, int, bool]]:
+    """Like _fields, but also finds signed fields (PIC S9...) and says which are signed."""
+    out: dict[str, tuple[int, int, bool]] = {}
+    for raw in cobol.splitlines():
+        line = raw[6:] if len(raw) > 6 and raw[6] in " *-/D" else raw
+        m = _PIC_ANY.match(line)
+        if not m:
+            continue
+        whole = int(m.group(3)) if m.group(3) else len(m.group(4))
+        frac = int(m.group(5)) if m.group(5) else (len(m.group(6)) if m.group(6) else 0)
+        out[m.group(1).upper()] = (whole, frac, bool(m.group(2)))
+    return out
+
+
 def infer_inputs(cobol: str) -> list[dict]:
-    fields = _fields(cobol)
+    fields = _fields_signed(cobol)
     lines = cobol.splitlines()
     inputs: list[dict] = []
     for i, raw in enumerate(lines):
@@ -51,7 +71,7 @@ def infer_inputs(cobol: str) -> list[dict]:
         if not m or m.group(1).upper() not in fields:
             continue
         target = m.group(1).upper()
-        digits, scale = fields[target]
+        digits, scale, signed = fields[target]
         # Leave one digit of headroom: a PIC 9(2) loop counter that must reach 99
         # wraps to 00 and the program never ends.
         cap = max(1, min(digits - 1, MAX_WHOLE_DIGITS))
@@ -59,7 +79,7 @@ def infer_inputs(cobol: str) -> list[dict]:
             "name": target.removeprefix("WS-").lower().replace("-", " "),
             "digits": digits,
             "scale": scale,
-            "min": "0",
+            "min": f"-{10**cap - 1}" if signed else "0",
             "max": str(10**cap - 1),
         })
     return inputs

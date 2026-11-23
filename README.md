@@ -54,9 +54,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. The four bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
+Open http://localhost:3000. The five bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
 
-To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
+To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. Signed fields (`PIC S9...`) are detected too, with a range that includes negative numbers. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
 
 Deploying: see [docs/DEPLOY.md](docs/DEPLOY.md). CI runs the tests and the frontend build on every push.
 
@@ -75,17 +75,19 @@ docker run -p 8000:8000 necromancer-api
 | `payroll` | Overtime at 1.5x, tax on the part above 500.00 |
 | `loan` | Month by month repayment loop with a 360 month cap |
 | `invoice` | Discount tiers with EVALUATE, and tax with ROUNDED (rounds, where everything else truncates) |
+| `balance` | Paid minus owed stored in an unsigned field, so a negative result silently loses its sign |
 
-Each sample has a `.cbl` program, a `.json` file (summary, paragraph explanations, input ranges) and a `.py` translation. All four are verified by the seance in the test suite.
+Each sample has a `.cbl` program, a `.json` file (summary, paragraph explanations, input ranges) and a `.py` translation. All five are verified by the seance in the test suite.
 
 ## What the seance caught
 
-Three real COBOL traps showed up while building this, and the seance is what exposed them.
+Four real COBOL traps showed up while building this, and the seance is what exposed them.
 
 1. **COBOL truncates, Python rounds.** `COMPUTE` without `ROUNDED` cuts extra decimals off when it stores a result. A natural Python translation rounds instead, and the totals drift by cents. Translations must quantize with `ROUND_DOWN`. The reverse also holds: `COMPUTE ... ROUNDED` rounds half up, so the `invoice` sample needs `ROUND_HALF_UP` for its tax.
 2. **`ACCEPT` into a numeric field copies characters.** `19.99` read into `PIC 9(2)V99` silently becomes `19.90`. Programs here read each line as text and convert it with `FUNCTION NUMVAL`.
 
-3. **Loop counters wrap.** A `PIC 9(2)` counter that must reach 99 wraps to 00, so the loop never ends. The seance reports a hang or crash in the old program as a restless spirit instead of stopping, and input ranges leave one digit of headroom.
+3. **Unsigned fields drop the minus sign.** `COMPUTE` into an unsigned field stores the absolute value, so paid 0.00 minus owed 0.01 prints `0000.01`, while a natural Python translation prints `-000.01`. The `balance` sample is built around this, and the Autopsy warns about it before you run anything.
+4. **Loop counters wrap.** A `PIC 9(2)` counter that must reach 99 wraps to 00, so the loop never ends. The seance reports a hang or crash in the old program as a restless spirit instead of stopping, and input ranges leave one digit of headroom.
 
 ## The I/O contract
 

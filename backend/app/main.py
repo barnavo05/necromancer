@@ -62,8 +62,8 @@ class InputField(BaseModel):
     name: str = Field(max_length=40)
     digits: int = Field(ge=1, le=18)
     scale: int = Field(ge=0, le=6)
-    min: str = Field(pattern=r"^\d{1,18}(\.\d{1,6})?$")
-    max: str = Field(pattern=r"^\d{1,18}(\.\d{1,6})?$")
+    min: str = Field(pattern=r"^-?\d{1,18}(\.\d{1,6})?$")
+    max: str = Field(pattern=r"^-?\d{1,18}(\.\d{1,6})?$")
 
 
 class CodeRequest(BaseModel):

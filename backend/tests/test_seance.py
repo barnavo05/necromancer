@@ -104,8 +104,8 @@ def test_every_sample_is_verified(sample_id):
     assert res.json()["verified"] is True, res.json()["restless_spirits"][:1]
 
 
-def test_four_samples_exist():
-    assert SAMPLE_IDS == ["interest", "invoice", "loan", "payroll"]
+def test_five_samples_exist():
+    assert SAMPLE_IDS == ["balance", "interest", "invoice", "loan", "payroll"]
 
 
 @pytest.mark.parametrize("sample_id", SAMPLE_IDS)
@@ -273,7 +273,8 @@ def test_haunt_catches_most_injected_bugs(sample_id):
     res = client.post("/api/haunt", json={"sample_id": sample_id, "cases": 100})
     assert res.status_code == 200
     body = res.json()
-    assert body["total"] >= 3
+    # balance is a two line program, so it only offers one bug to inject
+    assert body["total"] >= (1 if sample_id == "balance" else 3)
     assert body["caught"] / body["total"] >= 0.6
     assert all(m["status"] in {"caught", "caught_on_stress", "survived"} for m in body["mutants"])
 
@@ -311,3 +312,67 @@ def test_exorcise_without_a_key_is_503(monkeypatch):
         "from decimal import Decimal, ROUND_DOWN,", "from decimal import Decimal, ROUND_HALF_UP, ROUND_DOWN,")
     res = client.post("/api/exorcise", json={"sample_id": "interest", "python": bad, "cases": 40})
     assert res.status_code == 503
+
+
+# Signed fields
+
+SIGNED_COBOL = """       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SIGNEDDIFF.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-LINE           PIC X(20).
+       01 WS-PAID           PIC S9(4)V99.
+       01 WS-OWED           PIC S9(4)V99.
+       01 WS-DIFF           PIC S9(4)V99.
+       01 WS-DIFF-OUT       PIC -9(4).99.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           ACCEPT WS-LINE
+           COMPUTE WS-PAID = FUNCTION NUMVAL(WS-LINE)
+           ACCEPT WS-LINE
+           COMPUTE WS-OWED = FUNCTION NUMVAL(WS-LINE)
+           COMPUTE WS-DIFF = WS-PAID - WS-OWED
+           MOVE WS-DIFF TO WS-DIFF-OUT
+           DISPLAY "DIFF=" WS-DIFF-OUT
+           STOP RUN.
+"""
+
+SIGNED_PYTHON = """from decimal import Decimal
+
+def main(lines):
+    diff = Decimal(lines[0]) - Decimal(lines[1])
+    sign = "-" if diff < 0 else " "
+    return [f"DIFF={sign}{abs(diff):07.2f}"]
+"""
+
+
+def test_infer_finds_signed_fields_with_negative_range():
+    from app.infer import infer_inputs
+
+    spec = infer_inputs(SIGNED_COBOL)
+    assert [(f["name"], f["min"], f["max"]) for f in spec] == [("paid", "-999", "999"), ("owed", "-999", "999")]
+
+
+def test_negative_values_are_formatted_as_plain_decimal_text():
+    from app.seance import format_value
+
+    assert format_value(-5, 2) == "-0.05"
+    assert format_value(-1234, 2) == "-12.34"
+    assert format_value(-7, 0) == "-7"
+    assert format_value(1234, 2) == "12.34"
+
+
+def test_signed_program_runs_a_clean_seance_with_negative_inputs():
+    from app.infer import infer_inputs
+
+    spec = infer_inputs(SIGNED_COBOL)
+    result = run_seance(SIGNED_COBOL, SIGNED_PYTHON, spec, 80)
+    assert result["verified"] is True
+
+
+def test_unsigned_subtraction_sample_catches_a_signed_translation():
+    cobol = (SAMPLES / "balance.cbl").read_text()
+    naive = (SAMPLES / "balance.py").read_text().replace("abs(paid - owed)", "paid - owed")
+    result = run_seance(cobol, naive, json.loads((SAMPLES / "balance.json").read_text())["inputs"], 100)
+    assert result["verified"] is False
+    assert result["minimal_spirit"] is not None
