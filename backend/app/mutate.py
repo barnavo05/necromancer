@@ -66,6 +66,11 @@ def _sites(source: str) -> list[tuple[str, int, str, str]]:
                 out.append(("constant", i, code[: m.start()] + new + code[m.end():] + tail,
                             f"line {i + 1}: {value} became {new}"))
         swap("arithmetic", " + ", " - ", desc=f"line {i + 1}: + became -")
+        swap("arithmetic", " - ", " + ", desc=f"line {i + 1}: - became +")
+        # COBOL unsigned fields drop the minus sign, so losing an abs() is a classic translation bug
+        for m in re.finditer(r"\babs\(([^()]*)\)", code):
+            out.append(("sign", i, code[: m.start()] + "(" + m.group(1) + ")" + code[m.end():] + tail,
+                        f"line {i + 1}: abs() removed, the sign is kept"))
     return out
 
 

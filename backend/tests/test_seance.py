@@ -273,8 +273,7 @@ def test_haunt_catches_most_injected_bugs(sample_id):
     res = client.post("/api/haunt", json={"sample_id": sample_id, "cases": 100})
     assert res.status_code == 200
     body = res.json()
-    # balance is a two line program, so it only offers one bug to inject
-    assert body["total"] >= (1 if sample_id == "balance" else 3)
+    assert body["total"] >= 3
     assert body["caught"] / body["total"] >= 0.6
     assert all(m["status"] in {"caught", "caught_on_stress", "survived"} for m in body["mutants"])
 
@@ -376,3 +375,9 @@ def test_unsigned_subtraction_sample_catches_a_signed_translation():
     result = run_seance(cobol, naive, json.loads((SAMPLES / "balance.json").read_text())["inputs"], 100)
     assert result["verified"] is False
     assert result["minimal_spirit"] is not None
+
+
+def test_haunt_injects_a_lost_abs_bug_and_the_seance_catches_it():
+    res = client.post("/api/haunt", json={"sample_id": "balance", "cases": 100}).json()
+    lost_abs = [m for m in res["mutants"] if m["kind"] == "sign"]
+    assert lost_abs and lost_abs[0]["status"] in {"caught", "caught_on_stress"}
