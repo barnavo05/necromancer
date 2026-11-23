@@ -35,7 +35,7 @@ The seance is not a handful of hand picked examples. It is built to be hard to f
 - **Haunt.** Necromancer injects bugs into the translation on its own (rounding mode swapped, `>` becomes `>=`, a rate nudged by one digit) and reports how many the seance catches. Survivors are shown, not hidden, with a second pass of 500 extra random inputs before one is called harmless.
 - **Autopsy.** A static check lists what will bite a translation in this program: silent truncation, `ROUNDED`, silent overflow, unsigned fields, wrapping loop counters, `EVALUATE` order. No model needed.
 - **Certificate.** A verified run can be downloaded as JSON: SHA 256 of both programs, the input ranges, the edges tested, the compiler version and the counts. It identifies exactly what was verified.
-- **Exorcise.** When the seance fails, the model reads the restless spirits, repairs the Python, and the seance runs again, up to three rounds. This is the one feature that needs the API key. Its loop is tested with a mocked model and has not been run against a live model from this repo yet.
+- **Exorcise.** When the seance fails, the model reads the restless spirits, repairs the Python, and the seance runs again, up to three rounds. This is the one feature that needs a model key. Its loop is tested with a mocked model, and it has been run against a live model on the deployed site: a deliberately broken rounding rule was repaired in 2 rounds (152 of 200 matched, then 200 of 200).
 
 ## Run it
 
@@ -56,7 +56,7 @@ npm run dev
 
 Open http://localhost:3000. The four bundled samples work without any API key, because their explanations and translations are bundled and the seance runs for real.
 
-To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment (see `.env.example`). The key is only ever used on the server.
+To use **Your own program**, paste COBOL that reads each input with `ACCEPT` into a text field followed by `FUNCTION NUMVAL`, click Find inputs, and adjust the ranges. You can write the Python yourself and run the seance with no key. To have Necromancer explain and translate it for you, set `ANTHROPIC_API_KEY` in the backend environment, or the free `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` settings (see `.env.example`). The key is only ever used on the server.
 
 Deploying: see [docs/DEPLOY.md](docs/DEPLOY.md). CI runs the tests and the frontend build on every push.
 
@@ -120,7 +120,7 @@ Three real COBOL traps showed up while building this, and the seance is what exp
 
 - **Steering** in [`.kiro/steering`](.kiro/steering) holds the product, tech and design rules that every change follows
 - **Agent hook** in [`.kiro/hooks`](.kiro/hooks) runs the test suite whenever backend code or a COBOL sample changes
-- **Specs** drive the build from requirements to design to tasks
+- **Specs** in [`.kiro/specs`](.kiro/specs) set out requirements, design and tasks for the seance and for the model assisted steps
 
 ## Ground rules
 
