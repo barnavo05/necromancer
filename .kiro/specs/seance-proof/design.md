@@ -30,7 +30,7 @@ FastAPI backend, Hypothesis for input generation, GnuCOBOL (`cobc`) for the orig
 - Inputs are plain decimal text and programs use ACCEPT into text plus FUNCTION NUMVAL, because ACCEPT straight into a numeric field copies characters (19.99 into PIC 9(2)V99 becomes 19.90).
 - Money is translated with Python `Decimal`. COMPUTE truncates (ROUND_DOWN), COMPUTE ROUNDED rounds half up (ROUND_HALF_UP).
 - Requests are limited: COBOL 20,000 characters, Python 50,000, at most 8 inputs, at most 500 cases.
-- Haunt stress retries use a fixed seed so results are repeatable.
+- The main seance is deterministic (Hypothesis derandomized), so the same program gives the same cases. The 500 extra stress inputs in Haunt are random on each run, so a borderline survivor can be caught on one run and survive on another.
 
 ## Testing
 
